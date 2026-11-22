@@ -1,0 +1,87 @@
+---
+title: "Teste"
+author: "Daniel"
+date: "2023-06-22"
+output: html_document
+---
+
+```{r}
+library(gmailr)
+library(glue)
+
+get_day = function(){
+  data = as.Date(Sys.time())
+  dia_da_semana <- (as.numeric(format(data, "%u")) %% 7) + 1
+  return(dia_da_semana)
+}
+
+get_mensagem = function(prev){
+  dia = get_day()
+  mensagemDom <- glue(.trim = FALSE, .open = "<", .close = ">",
+                            'Hoje é domingo. Como a bolsa de valores não abre hoje, não teremos previsões! Entretanto, amanhã é dia de trabalhar e teremos mais previsões!!!')
+  mensagemSeg <- glue(.trim = FALSE, .open = "<", .close = ">",
+                            'Hoje é segunda-feira. Uma nova semana se inicia e, com ela, novas oportunidades aparecem! \n Seguem as previsões para hoje: retorno: <prev[1]>, VaR: <prev[2]>, ES: <prev[3]>. Espero que com essas informações você consiga tomar boas decisões e ganhar muito dinheiro!')
+  mensagemTer <- glue(.trim = FALSE, .open = "<", .close = ">",
+                            'Hoje é terça-feira. Inspirado pelos resultados de ontem, hoje vai ser um dia de muito sucesso no mercado de ações, desde que você siga nossas predições! Seguem as previsões para hoje: retorno: <prev[1]>, VaR: <prev[2]>, ES: <prev[3]>. Espero que com essas informações você consiga tomar boas decisões e ganhar muito dinheiro!')
+  mensagemQua <- glue(.trim = FALSE, .open = "<", .close = ">",
+                            'Hoje é quarta-feira. A semana já chegou à metade, é hora de dar o seu melhor para cumprir todas as metas que você possui! Para ajudar, seguem as previsões para hoje: retorno: <prev[1]>, VaR: <prev[2]>, ES: <prev[3]>. Espero que com essas informações você consiga tomar boas decisões e ganhar muito dinheiro!')
+  mensagemQui <- glue(.trim = FALSE, .open = "<", .close = ">",
+                            'Hoje é quinta-feira. A semana está quase terminando, então é dia de trabalhar com muita energia e impressionar o seu chefe com seus resultados! Para te ajudar, seguem as previsões para hoje: retorno: <prev[1]>, VaR: <prev[2]>, ES: <prev[3]>. Espero que com essas informações você consiga tomar boas decisões e ganhar muito dinheiro!')
+  mensagemSex <- glue(.trim = FALSE, .open = "<", .close = ">",
+                            'Hoje é sexta-feira. Para fechar a semana com chave de ouro, seguem as previsões para hoje: retorno: <prev[1]>, VaR: <prev[2]>, ES: <prev[3]>. Espero que com essas informações você consiga tomar boas decisões e ganhar muito dinheiro!')
+  mensagemSab <- glue(.trim = FALSE, .open = "<", .close = ">",
+                            'Hoje é sábado. Como a bolsa de valores não abre hoje, não teremos previsões! Aproveite o final de semana!!')
+  
+  mensagens <- c(mensagemDom, mensagemSeg, mensagemTer, mensagemQua, mensagemQui, mensagemSex, mensagemSab)
+  
+  mensagem <- mensagens[dia]
+  
+  return(mensagem)
+}
+
+oauth_json <- file.path("secrets", "google-oauth-client.json")
+renviron <- file.path("secrets", ".Renviron")
+gargle_cache <- file.path("secrets", "gargle-cache")
+dir.create(gargle_cache, recursive = TRUE, showWarnings = FALSE)
+
+if (file.exists(oauth_json)) {
+  options(gargle_oauth_cache = gargle_cache)
+  gm_auth_configure(path = oauth_json)
+  gm_auth()
+} else if (file.exists(renviron)) {
+  readRenviron(renviron)
+  meu_email <- Sys.getenv("GMAIL_FROM")
+  client_id <- Sys.getenv("GOOGLE_CLIENT_ID")
+  client_secret <- Sys.getenv("GOOGLE_CLIENT_SECRET")
+  if (!nzchar(client_id) || !nzchar(client_secret)) {
+    stop(
+      "Credenciais ausentes. Baixe JSON em ",
+      "https://console.cloud.google.com/apis/credentials ",
+      "ou preencha secrets/.Renviron. Veja secrets/README.md."
+    )
+  }
+  options(gargle_oauth_cache = gargle_cache, gargle_oauth_email = meu_email)
+  gm_auth_configure(key = client_id, secret = client_secret)
+  gm_auth(email = meu_email)
+} else {
+  stop("Configure secrets/ conforme secrets/README.md")
+}
+
+meu_email <- Sys.getenv("GMAIL_FROM", Sys.getenv("GARGLE_OAUTH_EMAIL", ""))
+seu_email <- Sys.getenv("GMAIL_TO", meu_email)
+if (!nzchar(meu_email)) stop("Defina GMAIL_FROM em secrets/.Renviron ou use JSON OAuth.")
+
+previsoes = c(1,2,3)
+
+mensagem = get_mensagem(previsoes)
+
+arquivo = "rato.jpg" |> file.path()
+
+msg = gm_mime() |> gm_from(meu_email) |>
+  gm_to(seu_email) |> gm_text_body(mensagem) |>
+  gm_attach_file(arquivo)
+
+gm_send_message(msg)
+
+```
+

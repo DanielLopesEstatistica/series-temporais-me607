@@ -1,0 +1,469 @@
+---
+title: "Séries Temporais"
+output: html_document
+date: "2023-03-19"
+---
+#Bibliotecas
+```{r}
+library(tidyverse)
+library(tsibble)
+library(fpp3)
+library(stringi)
+library(stringr)
+library(seasonal)
+```
+
+
+#Slide 2
+##Código 1
+```{r}
+url <- "https://raw.githubusercontent.com/ctruciosm/ctruciosm.github.io/master/datasets/BTCUSDT.csv"
+btc <- read.csv(url)
+btc <- btc |> 
+  select(timestamp, close) |> 
+  mutate(timestamp = as.Date(timestamp)) |> 
+  as_tsibble(index = timestamp)
+btc |> ggplot() + 
+  geom_line(aes(x = timestamp, y = close), color = "green4") +
+  ylab("Preço de fechamento") + 
+  xlab("Tempo")
+```
+##Código 2
+```{r}
+ansett |> filter(Airports == "ADL-PER", Class == "Economy") |> 
+  autoplot(Passengers) + 
+  labs(title = "Ansett airlines clase econômica",
+       subtitle = "Adelaide(ADL) - Perth(PER)",
+       y = "Número de passageiros",
+       x = "Tempo")
+```
+##Código 3
+```{r}
+PBS |> filter(ATC2 == "A10") |> 
+  summarise(TotalC = sum(Cost)) |>
+  mutate(Cost = TotalC/1e6) |> 
+  autoplot(Cost) + 
+  labs(title = "Medicamentos para diabetes na Austrália",
+       y = "$ (milhões de dólares)",
+       x = "Tempo")
+```
+##Código 4
+```{r}
+btc |> mutate(retornos = log(close/lag(close))*100) |> 
+  ggplot() + geom_line(aes(x = timestamp, y = retornos)) + 
+  labs(title = "Bitcoin: retornos diários",
+       y = "Retorno",
+       x = "Tempo")
+```
+
+##Código 5
+```{r}
+PBS |> filter(ATC2 == "A10") |> 
+  summarise(TotalC = sum(Cost)) |>
+  mutate(Cost = TotalC/1e6) |> 
+  gg_season(Cost, labels = "both") + 
+  labs(y = "$ (milhões)",
+       title = "Gráfico sazonal: vendas de medicamentos para a diabetes")
+```
+
+
+##Código 6
+```{r}
+vic_elec |>  gg_season(Demand, period = "day") +
+  theme(legend.position = "none") +
+  labs(y = "MWh", title = "Demanda de energía elétrica: Victoria, Austrália")
+```
+
+
+##Código 7
+```{r}
+vic_elec |>  gg_season(Demand, period = "week") +
+  theme(legend.position = "none") +
+  labs(y = "MWh", title = "Demanda de energía elétrica: Victoria, Austrália")
+```
+
+##Código 8
+```{r}
+vic_elec |> 
+  filter(year(Time) == 2014) |> 
+  autoplot(Temperature) +
+  labs(
+    y = "Graus Celsius",
+    title = "Temperatura (30 min)"
+  )
+```
+
+##Código 9
+
+```{r}
+vic_elec |> 
+  filter(year(Time) == 2014) |> 
+  autoplot(Demand) +
+  labs(y = "Gigawatts",
+       title = "Demanda energia elétrica (30 min)")
+```
+
+
+
+##Código 10
+
+```{r}
+vic_elec |> 
+  filter(year(Time) == 2014) |> 
+  ggplot(aes(x = Temperature, y = Demand)) +
+  geom_point() +
+  labs(x = "Tempertura (graus Celsius)",
+       y = "Demanda de energia (Gigawatts)")
+```
+##Código 11
+```{r}
+aus_production  |> 
+  filter(year(Quarter) >= 2000) |> 
+  gg_lag(Beer, geom = "point") +
+  labs(x = "lag(Beer, k)")
+```
+
+##Código 12
+```{r}
+btc |> ACF(close, lag_max = 50) |> 
+  autoplot()
+```
+
+##Código 13
+```{r}
+aus_production  |> 
+  filter(year(Quarter) >= 2000) |>  
+  ACF(Beer, lag_max = 18) |> 
+  autoplot() + labs(title = "Correlograma: produção trimestral de cerveja na Austrália")
+```
+
+##Código 14
+```{r}
+x = rnorm(1000)
+acf(x)
+```
+##Código 15
+```{r}
+btc |> ggplot() + geom_line(aes(x = timestamp, y = close), color = "green4") +
+  ylab("Preço de fechamento") + xlab("Tempo")
+```
+
+##Código 16
+```{r}
+aus_production  |> 
+  filter(year(Quarter) >= 2000) |> 
+  select(Quarter, Beer) |> 
+  autoplot()
+```
+
+##Código 17
+```{r}
+dados <- data.frame(Tempo = 1:length(x), x) |> as_tsibble(index = Tempo)
+dados |> autoplot()
+```
+
+
+#Slide 3
+
+##Código 1
+```{r}
+global_economy |> 
+  filter(Country == "Brazil") |> 
+  mutate(`5-MM` = slider::slide_dbl(Exports, mean, .before = 2, .after = 2, .complete = TRUE)) |> 
+  autoplot(Exports) + geom_line(aes(y = `5-MM`), colour = "red") +
+  labs(y = "% do PIB", title = "Brasil: exportação", x = "Ano")
+```
+##Código 2
+```{r}
+global_economy |> 
+  filter(Country == "Brazil") |> 
+  mutate(`9-MM` = slider::slide_dbl(Exports, mean, .before = 4, .after = 4, .complete = TRUE)) |> 
+  autoplot(Exports) + geom_line(aes(y = `9-MM`), colour = "red") +
+  labs(y = "% do PIB", title = "Brasil: exportação", x = "Ano")
+```
+
+##Código 3
+```{r}
+global_economy |> 
+  filter(Country == "Brazil") |> 
+  mutate(`15-MM` = slider::slide_dbl(Exports, mean, .before = 4, .after = 4, .complete = TRUE)) |> 
+  autoplot(Exports) + geom_line(aes(y = `15-MM`), colour = "red") +
+  labs(y = "% do PIB", title = "Brasil: exportação", x = "Ano")
+```
+
+##Código 4
+```{r}
+beer <- aus_production |> 
+  filter(year(Quarter) >= 1992) |> 
+  select(Quarter, Beer)
+beer_ma <- beer |> 
+  mutate( `4-MM` = slider::slide_dbl(Beer, mean,.before = 1, .after = 2, .complete = TRUE),
+          `2x4-MM` = slider::slide_dbl(`4-MM`, mean,  .before = 1, .after = 0, .complete = TRUE))
+beer_ma
+```
+
+##Decomposição Clássica
+###Importar Dados
+```{r}
+url <- "https://raw.githubusercontent.com/jbrownlee/Datasets/master/airline-passengers.csv"
+passageiros <- read.csv(url) 
+glimpse(passageiros) # R ainda não sabe que nossos dados são de séries temporais
+passageiros <- passageiros %>% mutate(Month = yearmonth(Month)) %>% as_tsibble(index = Month)
+glimpse(passageiros) # Agora R sabe sim!
+```
+
+###Gráfico
+```{r}
+ggplot(passageiros) + geom_line(aes(x = Month, y = Passengers))
+```
+
+###Decomposição
+```{r}
+dcmp <- passageiros %>%   # passageiros é do tipo tsibble
+  model(decomposition = classical_decomposition(Passengers,
+                                                type = "mult")) %>% 
+  components() 
+dcmp
+```
+
+###Decomposição do Gráfico
+```{r}
+passageiros %>%   # passageiros é do tipo tsibble
+  model(classical_decomposition(Passengers, type = "multiplicative")) %>% 
+  components() %>%  # extraimos as componentes T_t, S_t e R_t
+  autoplot()
+```
+
+    Além da função yearmonth() do pacote tsibble, outras funções úteis são yearquarter(), yearweek(), as_date(), ymd(), ymd_hms().
+    O argumento type dentro de classical_decomposition() pode ser “multiplicative” ou “aditive”, dependendo do tipo de decomposição a ser utilizada.
+
+##Código 5
+```{r}
+media_movel_par <- function(x, m) {
+  k <- m/2
+  n <- length(x)
+  Tt <- rep(NA, n)
+  pesos <- rep(1/m, m + 1)
+  pesos[1] <- 1/(2*m)
+  pesos[m + 1] <- 1/(2*m)
+  for (i in (k + 1):(n - k)) {
+    Tt[i] <- sum(pesos * x[(i - k):(i + k)])
+  }
+  return(Tt)
+}
+```
+
+
+##Código 6
+```{r}
+url <- "https://raw.githubusercontent.com/jbrownlee/Datasets/master/airline-passengers.csv"
+passageiros_hand <- read.csv(url) 
+passageiros_hand <- passageiros_hand |> 
+  mutate(Tt = media_movel_par(Passengers, 12)) |> 
+  mutate(At = Passengers/Tt)  # Removemos a tendência
+cbind(passageiros_hand$Tt, dcmp$trend)
+```
+
+
+##Código 7
+```{r}
+# Calculamos a componente Sazonal
+passageiros_st = passageiros_hand |> 
+  mutate(Month = month(yearmonth(Month))) |> 
+  group_by(Month) |> 
+  summarise(St = mean(At, na.rm = TRUE)) |> 
+  ungroup()
+cbind(passageiros_st$St, dcmp$seasonal[1:12])
+```
+
+
+##Código 8
+```{r}
+# Calculamos a componente Sazonal
+mu = mean(passageiros_st$St)
+mu
+```
+
+##Código 9
+```{r}
+passageiros %>%
+  model(X_13ARIMA_SEATS(Passengers ~ x11())) %>% 
+  components() %>%
+  autoplot()
+```
+
+##Código 10
+```{r}
+passageiros %>%
+  model(X_13ARIMA_SEATS(Passengers ~ seats())) %>% #<<
+  components() %>%
+  autoplot()
+```
+
+##Código 11
+```{r}
+passageiros %>%
+  model(STL(log(Passengers) ~ trend() + season(window = "periodic"), robust = TRUE)) %>% 
+  components() %>%
+  autoplot()
+```
+
+#Slide 4
+
+##Código 1
+```{r}
+economy <- read.csv("datasets/global_economy_aula.csv")
+br_gdppc <- economy |> 
+  filter(Country == "Brazil") |> 
+  mutate(GDP_pc = GDP/Population) |> 
+  select(Year, GDP_pc) |> 
+  as_tsibble(index = Year)
+glimpse(br_gdppc)
+```
+
+##Código 5
+```{r}
+uri <- "https://raw.githubusercontent.com/ctruciosm/ctruciosm.github.io/master/datasets/lajeado_rs.csv"
+lajeado_rs <- read.csv(uri, sep = ";") 
+# Passando para um formato de séries temporais
+lajeado_rs <- lajeado_rs %>% 
+  mutate(ano_mes = yearmonth(ano_mes)) %>% 
+  select(ano_mes, temp_media) %>% 
+  as_tsibble(index = ano_mes)
+glimpse(lajeado_rs)
+```
+
+##Código 6
+```{r}
+lajeado_rs |> autoplot()
+```
+
+##Código 7
+```{r}
+fit <- lajeado_rs %>% model(SNAIVE(temp_media~lag(12)))
+```
+
+##Código 8 
+```{r}
+fit %>% gg_tsresiduals()
+```
+
+##Código 9 
+```{r}
+fit |> 
+  augment() |> 
+  features(.innov, box_pierce, lag = 24, dof = 0)
+```
+##Código 10
+```{r}
+fit |> 
+  augment() |> 
+  features(.innov, ljung_box, lag = 24, dof = 0)
+```
+
+##Código 11
+```{r}
+residuos <- fit |> augment()
+Box.test(residuos$.innov, lag = 24, type = c("Box-Pierce"), fitdf = 0)
+```
+
+##Código 12
+```{r}
+Box.test(residuos$.innov, lag = 24, type = c("Ljung-Box"), fitdf = 0)
+```
+
+##Código 13
+```{r}
+us_retail_employment <- us_employment |>
+  filter(year(Month) >= 1990, Title == "Retail Trade")
+dcmp <- us_retail_employment |>
+  model(STL(Employed ~ trend(window = 7), robust = TRUE)) |>
+  components()
+dcmp |> autoplot()
+```
+
+##Código 14
+```{r}
+fit_dcmp <- us_retail_employment |>
+  model(stlf = decomposition_model(
+    STL(Employed ~ trend(window = 7), robust = TRUE),
+    NAIVE(season_adjust)))
+
+fit_dcmp |>
+  forecast() |>
+  autoplot(us_retail_employment, level = NULL) +
+  labs(y = "Number of people",
+       title = "US retail employment")
+```
+##Código 15
+```{r}
+fit_dcmp |> gg_tsresiduals()
+```
+
+##Código 16
+```{r}
+lajeado_rs_tr <- lajeado_rs %>% 
+  stretch_tsibble(.init = 3, .step = 1) 
+glimpse(lajeado_rs_tr)
+```
+
+##Código 17
+```{r}
+lajeado_rs_tr <- lajeado_rs %>% 
+  stretch_tsibble(.init = 50, .step = 1)
+glimpse(lajeado_rs_tr)
+```
+
+
+##Código 18
+```{r}
+lajeado_rs_tr %>%
+  model(RW(temp_media ~ drift())) %>%
+  forecast(h = 1) %>%
+  accuracy(lajeado_rs)
+```
+
+
+##Código 19
+```{r}
+lajeado_rs_tr %>%
+  model(RW(temp_media ~ drift())) %>%
+  forecast(h = 3) %>%
+  group_by(.id) %>%
+  mutate(h = row_number()) %>%
+  ungroup() %>% 
+  as_fable(response = "temp_media", distribution = temp_media) |> 
+  accuracy(lajeado_rs, by = c("h", ".model"))
+```
+
+##Código 20
+```{r}
+lajeado_rs_tr %>%
+  model(drif = RW(temp_media ~ drift()),
+        naive = NAIVE(temp_media),
+        snaive = SNAIVE(temp_media~lag(12)),
+        media = MEAN(temp_media)) %>%
+  forecast(h = 1) %>%
+  accuracy(lajeado_rs)
+```
+
+##Código 21
+```{r}
+fit <- lajeado_rs %>%
+  model(snaive = SNAIVE(temp_media~lag(12)))
+fit |> gg_tsresiduals()
+```
+
+##Código 22
+```{r}
+lajeado_rs_tr <- lajeado_rs |> 
+  tile_tsibble(.size = 3) 
+glimpse(lajeado_rs_tr)
+```
+
+
+
+
+
+
+

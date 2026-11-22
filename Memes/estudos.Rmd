@@ -1,0 +1,160 @@
+---
+title: "Estudos"
+author: "Daniel"
+date: "2023-06-18"
+output: html_document
+---
+
+MA (q):
+
+Yt = (1 + theta.B^1 + ... + theta.B^q)et
+
+Yt|F(Yt-1) = et + (theta.B^1 + ... + theta.B^q)et 
+
+Yt|F(Yt-1) = et + FUN(et-1) ~ N(FUN(et-1), sigma2)
+
+```{r}
+set.seed(123)
+calc_AR = function(Y, params){
+  sigma2 = params[1]
+  n_params = length(params) - 1
+  phis = params[2:(n_params+1)]
+  n = length(Y)
+  ll = rep(0, n)
+  
+  for(i in (n_params+1):n){
+    fun = (phis * Y[(i - n_params):(i-1)]) |> sum()
+    ll[i] = dnorm(Y[i], mean = fun, sd = sqrt(sigma2), log = TRUE)
+  }
+  resultado = -sum(ll)
+  return(resultado)
+}
+
+calc_MA = function(Y, params){
+  n = length(Y)
+  n_params = length(params) - 1
+  sigma2 = params[1]
+  thetas = params[2:(n_params+1)]
+  ll = rep(0, n)
+  e = rep(0, n)
+  
+  for(i in (n_params+1):n){
+    fun = (e[(i - n_params):(i-1)] * thetas) |> sum()
+    e[i] = Y[i] - fun
+    ll[i] = dnorm(Y[i], mean = fun, sd = sqrt(sigma2), log = TRUE)
+  }
+  resultado = -sum(ll)
+  return(resultado)
+}
+
+calc_ARMA = function(Y, params, order){
+    orderAR = order[1]
+    orderMA = order[2]
+    sigma2 = params[1]
+    phis = params[2:(orderAR + 1)]
+    thetas = params[(orderAR + 2):(1+orderAR+orderMA)]
+    paramsAR = c(sigma2, phis)
+    paramsMA = c(sigma2, thetas)
+    ll = calc_AR(Y, paramsAR) + calc_MA(Y, paramsMA)
+    return(ll)
+}
+```
+
+```{r}
+MA = function(Y, n_params){
+  modelo = optim(par = c(1, rep(0.5/n_params, n_params)), fn = calc_MA, Y = Y, method = "L-BFGS-B", lower = c(0, rep(-1, n_params)),
+                 upper = c(Inf, rep(1, n_params)))
+  
+  resultado = list()
+  resultado$sigma2 = modelo$par[1]
+  resultado$parametros = modelo$par[2:(n_params+1)] |> rev()
+  return(resultado)
+}
+
+dados = arima.sim(n = 10000, list(ma = c(0.29, -0.2)), sd = 1)
+
+MA(dados, 2)
+```
+
+```{r}
+AR = function(Y, n_params){
+  modelo = optim(par = c(1, rep(0.5/n_params, n_params)), fn = calc_AR, Y = Y, method = "L-BFGS-B", lower = c(0, rep(-1, n_params)),
+                 upper = c(Inf, rep(1, n_params)))
+  
+  
+  resultado = list()
+  resultado$sigma2 = modelo$par[1]
+  resultado$parametros = modelo$par[2:(n_params+1)] |> rev()
+  return(resultado)
+}
+
+dados = arima.sim(n = 1000, list(ar = c(0.4, -0.1)), sd = 1)
+
+AR(dados, 2) |> print()
+arima(dados, c(2,0,0))
+```
+
+```{r}
+ARMA = function(Y, order){
+  orderAR = order[1]
+  orderMA = order[2]
+  
+  modelo = optim(par = c(1, rep(0.1/orderAR, orderAR), rep(0.1/orderMA, orderMA)), fn = calc_ARMA, Y = Y, order = order,
+                 method = "L-BFGS-B", lower = c(0, rep(-1, orderMA+orderAR)),
+                 upper = c(Inf, rep(1, orderMA+orderAR)))
+  
+  resultado = list()
+  resultado$sigma2 = modelo$par[1]
+  resultado$ar = modelo$par[2:(orderAR + 1)] |> rev()
+  resultado$ma = modelo$par[(orderAR + 2):(orderMA + orderAR + 1)] |> rev()
+  return(resultado)
+}
+
+dados = arima.sim(n = 10000, list(ar = c(-0.2, 0.4), ma = (0.9)))
+ARMA(dados, c(2,1)) |> print()
+arima(dados, order = c(2,0,1))
+```
+
+```{r}
+gerar_arma = function(n, params, sigma2 = 1){
+  phis = params$ar |> rev()
+  thetas = c(1, params$ma) |> rev()
+  real_n = n + 5000
+  e = rnorm(real_n, mean = 0, sd = sigma2)
+  y = rep(0, real_n)
+  start = max(length(phis), length(thetas))
+  
+  lphis = length(phis)
+  lthetas = length(thetas)
+  
+  if(phis |> is.null()){phis = 0}
+  if(thetas |> is.null()){thetas = 0}
+  
+  for(i in (start+1):(real_n)){
+    y[i] = y[(i - lphis):(i-1)]%*%phis + e[(i - lthetas + 1):(i)]%*%thetas
+  }
+  return(y[1000:real_n])
+}
+
+dados = gerar_arma(n = 10000, params = list(ar = c(-0.1, 0.4), ma = c(0.2, -0.1)))
+plot(as.ts(dados))
+
+arima(dados, order = c(2,0,2))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

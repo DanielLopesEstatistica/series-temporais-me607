@@ -1,0 +1,19 @@
+# R / RStudio
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+
+# Credenciais (ver secrets/README.md)
+secrets/*
+!secrets/README.md
+!secrets/.gitignore
+!secrets/**/*.example
+.env
+.Renviron
+.secret/
+
+rsconnect/
+
+.DS_Store
+Thumbs.db

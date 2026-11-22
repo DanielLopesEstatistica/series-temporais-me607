@@ -1,0 +1,91 @@
+---
+title: "Aplicacao"
+output:
+  html_document: default
+  pdf_document: default
+date: "2023-03-20"
+---
+
+```{r}
+library(knitr)
+library(tidyverse)
+library(tsibble)
+library(fpp3)
+```
+
+
+```{r}
+url <- "https://raw.githubusercontent.com/jbrownlee/Datasets/master/airline-passengers.csv"
+passageiros <- read.csv(url) 
+passageiros <- passageiros %>%
+  mutate(Month = yearmonth(Month)) %>%
+  as_tsibble(index = Month) |>
+  #aplicar uma transformação matemática para usar um modelo aditivo no futuro
+  mutate(Passengers = log(Passengers))
+ggplot(passageiros) + 
+  geom_line(aes(x = Month, y = Passengers))
+```
+
+```{r}
+#separação do modelo em trend, seasonal e random, do tipo aditivo
+passageiros %>%   
+  model(classical_decomposition(Passengers, type = "additive")) %>% 
+  components() %>%  
+  autoplot()
+```
+```{r}
+dcmp <- passageiros %>%   
+  model(decomposition = classical_decomposition(Passengers,
+                                                type = "add")) %>% 
+  components() 
+dcmp
+```
+
+```{r}
+trend <- dcmp[,c(2,4)]
+modelo_regressao <- lm(trend ~ Month, trend, na.action = na.exclude)
+beta0 <- modelo_regressao$coefficients[1]
+beta1 <- modelo_regressao$coefficients[2]
+
+#utilizando os valores em trend para calcular, através de regressão linear, uma reta que estima a trend do modelo
+
+ggplot() +
+  geom_line(data = trend, aes(x = Month, y = trend)) +
+  geom_abline(intercept = beta0, slope = beta1, color = "blue")
+
+
+```
+```{r}
+predicted <- predict(modelo_regressao, newdata = passageiros)
+#considerando E(Y) = a reta de regressão calculada para a trend, encontramos N_passageiros = Y_n = Y - E(Y) - S
+N_passageiros = passageiros$Passengers - predicted - dcmp$seasonal
+passageiros = passageiros |> mutate(N_passengers = N_passageiros)
+
+ggplot(passageiros) + 
+  geom_line(aes(x = Month, y = N_passengers))
+```
+```{r}
+modelo_2 <- lm(Passengers ~ Month, data = passageiros)
+
+#Calculando as estatísticas r² e r² ajustado para Y e Y_n (N_passageiros)
+rsquared <- summary(modelo_2)$r.squared
+rsquared_adj <- summary(modelo_2)$adj.r.squared
+
+modelo_3 <- lm(N_passengers ~ Month, data = passageiros)
+
+N_rsquared <- summary(modelo_3)$r.squared
+N_rsquared_adj <- summary(modelo_3)$adj.r.squared
+
+```
+
+```{r}
+#Tabela com os valores das estatísticas calculadas
+table_data <- data.frame(
+  statistic = c("R-squared", "Adjusted R-squared", "N-R-squared", "Adjusted N-R-Squared"),
+  value = c(rsquared, rsquared_adj, N_rsquared, N_rsquared_adj)
+)
+
+kable(table_data, align = "c")
+```
+
+

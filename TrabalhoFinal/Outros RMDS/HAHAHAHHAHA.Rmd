@@ -1,0 +1,144 @@
+---
+title: "Modelos"
+author: "Daniel"
+date: "2023-06-16"
+output: html_document
+---
+
+```{r}
+library(TSA)
+library(rugarch)
+```
+
+```{r}
+#simular
+simula_garch11 <- function(omega = 0.01, alpha = 0.059739, beta = 0.813572,
+                           n = 10000, skip = 1000){
+  n <- n+skip
+  r <- rep(0,n)
+  sigma2 <- rep(0,n)
+  sigma2[1] <- 1
+  epsilon <- rnorm(n)
+  for(i in 2:n){
+    sigma2[i] <- omega + alpha*r[i-1]^2 + beta*sigma2[i-1]
+    r[i] <- sqrt(sigma2[i])*epsilon[i]
+  }
+  
+  return(r[(seq(1,n)+skip)])
+}
+
+serie = simula_garch11(n = 1000) |> na.omit()
+```
+
+```{r}
+#ugarch
+spec <- ugarchspec(mean.model = list(armaOrder = c(1, 0), include.mean = FALSE),
+                   variance.model = list(model = 'sGARCH', garchOrder = c(1, 1)),
+                   distribution = 'norm')
+
+fit_01 <- ugarchfit(spec, serie, solver = 'hybrid')
+
+print(fit_01@fit$coef)
+```
+
+
+```{r}
+#meu
+set.seed(123)
+
+est_ar1garch1 = function(Y){
+  calc_ar1garch1 = function(Y, param){
+    phi = param[1]
+    omega = param[2]
+    alpha = param[3]
+    beta = param[4]
+    
+    n = length(Y)
+    r = Y[-1] - phi*Y[-n]
+    r = c(0, r)
+    sigma2 = rep(0, n)
+    sigma2[1] = var(Y)
+    ll = rep(0,n)
+    
+    #r = rep(0, n)
+    
+    for(i in 2:n){
+      #r[i] = Y[i] - phi*Y[i-1]
+      sigma2[i] = omega + alpha*(r[i-1])^2 + beta*(sigma2[i-1])
+      ll[i] = -log(sigma2[i]) - ((r[i])^2)/(sigma2[i])
+    }
+    resultado = -sum(ll)
+    return(resultado)
+  }
+  
+  modelo = optim(par = c(0.04, 0.7, 0.1, .7), fn = calc_ar1garch1, Y = scale(Y))$par |> as.data.frame() |> t()
+  row.names(modelo) = NULL
+  colnames(modelo) = c("ar1", "omega", "alpha1", "beta1")
+  return(modelo)
+}
+
+fit_02 = est_ar1garch1(serie)
+
+print(cbind(modelo = c("ugarch", "meu"), rbind(fit_01@fit$coef, fit_02)))
+```
+
+```{r}
+#Lucas
+estima_ar1_garch11 <- function(y, params){
+  omega <- params[2]
+  alpha <- params[3]
+  beta <- params[4]
+  phi <- params[1]
+  n <- length(y)
+  
+  r <- rep(0, n)
+  sigma2 <- rep(0, n)
+  llk <- rep(0, n)
+  sigma2[1] <- var(r)
+  for (i in 2:n){
+    r[i] <- y[i] - phi*y[i-1]
+    sigma2[i] <- omega + alpha*r[i-1]^2 + beta*sigma2[i-1]
+    llk[i] <- -log(omega + alpha*r[i-1]^2 + beta*sigma2[i-1])-
+      (y[i] - phi*y[i-1])^2/(omega + alpha*r[i-1]^2 + beta*sigma2[i-1])
+  }
+  llk <- sum(llk)
+  return(-llk)
+}
+
+fit_03 = optim(par = c(0.04, 0.7, 0.1, .7), fn = estima_ar1_garch11, y = scale(serie, center = T, scale = T))$par |> as.data.frame() |> t()
+rownames(fit_03) = NULL
+colnames(fit_03) = c("ar1", "omega", "alpha1", "beta1")
+
+print(cbind(modelo = c("ugarch", "meu", "lucas"), rbind(fit_01@fit$coef, fit_02, fit_03)))
+```
+
+```{r}
+estima_ar1_garch11 <- function(y, params) {
+  omega <- params[2]
+  alpha <- params[3]
+  beta <- params[4]
+  phi <- params[1]
+  n <- length(y)
+
+  r <- rep(0, n)
+  sigma2 <- rep(0, n)
+  llk <- rep(0, n)
+  sigma2[1] <- var(y)
+
+  for (i in 2:n) {
+    r[i] <- y[i] - phi * y[i - 1]
+    sigma2[i] <- omega + alpha * (r[i - 1]^2) + beta * sigma2[i - 1]
+    llk[i] <- dnorm(y[i], mean = phi * y[i - 1], sd = sqrt(sigma2[i]), log = TRUE)
+  }
+  llk <- sum(llk)
+  return(-llk)
+}
+
+fit_03 <- optim(par = c(0.7, 0.04, 0.1, 0.7), fn = estima_ar1_garch11, y = scale(serie))$par |> as.data.frame() |>  t()
+
+rownames(fit_03) = NULL
+colnames(fit_03) = c("ar1", "omega", "alpha1", "beta1")
+
+print(cbind(modelo = c("ugarch", "meu", "lucas"), rbind(fit_01@fit$coef, fit_02, fit_03)))
+```
+

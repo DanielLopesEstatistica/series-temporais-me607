@@ -1,0 +1,86 @@
+---
+title: "GeloArtico"
+author: "Daniel"
+date: "2023-07-07"
+output: html_document
+---
+
+```{r}
+dados = read.csv("ExtentIce.csv")
+```
+
+```{r}
+obser = dados$SeaIceExtent.km2. |> as.ts()
+plot(obser)
+```
+```{r}
+library(rugarch)
+```
+
+```{r}
+diff1 = obser |> diff()
+
+plot(diff1)
+```
+```{r}
+armapart = arima(diff1, order = c(1, 0, 1), seasonal = list(order = c(1, 0, 0), period = 182))
+```
+
+```{r}
+residuosarma = armapart$residuals
+
+plot(residuosarma)
+```
+
+```{r}
+residuosarma_scaled = scale(residuosarma) |> as.ts()
+plot(residuosarma_scaled)
+```
+
+
+```{r}
+spec = ugarchspec(
+  variance.model = list(
+    garchOrder = c(2, 2), #I've tried a few, starting at (1,1). those yielded the "best" model
+    model = "sGARCH"),
+  mean.model = list(
+    armaOrder = c(1,1), #the parameters previously identified using auto.arima()
+    include.mean = F)
+)
+
+modelo = ugarchfit(spec, residuosarma_scaled)
+```
+
+```{r}
+modelo
+```
+
+
+```{r}
+modelo@fit$residuals |> as.ts() |> plot()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

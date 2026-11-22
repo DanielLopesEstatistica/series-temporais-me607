@@ -1,0 +1,196 @@
+---
+title: "Series Trabalho Final"
+output: html_document
+date: "2023-05-03"
+---
+
+```{r}
+library(shiny)
+library(tidyverse)
+library(quantmod)
+library(fable)
+library(gridExtra)
+
+forecast = fabletools::forecast
+```
+
+```{r}
+get_data_stock = function(symbol, source = "yahoo"){
+  suppressWarnings({
+    getSymbols(symbol, src = source)
+    gold.data = fortify(get(symbol))
+    gold.data <- data.frame(gold.data)
+  })
+  df = gold.data[,c(1,4)]
+  colnames(df) = c("index", "price")
+  return(df)
+}
+
+get_prev = function(data, modelo_str, param, h = 5){
+  sequencia = seq(from = data[nrow(data),1], by = 1, length.out = 5)
+  data = na.omit(data)
+  data$index = seq(from = data[1,1], by = 1, length.out = nrow(data))
+  ts_df = as_tsibble(data)
+  if(modelo_str == "ARIMA"){
+    modelo = ts_df %>% model(ARIMA(price ~ pdq(param[1],param[2],param[3])))
+  }
+  plots = feasts::gg_tsresiduals(modelo)
+  prev = forecast(modelo, h = 5)
+  prev = as.data.frame(prev)
+  prev$index= sequencia
+  prev = prev[,c(2,4)]
+  colnames(prev) = c("index", "price")
+  return(list(prev, plots))
+}
+
+get_graph = function(data, modelo_str, param, show = nrow(data), h = 5){
+  df_to_show = data[(nrow(data)-show):nrow(data),]
+  df_to_show = na.omit(df_to_show)
+  
+  infos = get_prev(data = data, modelo_str = modelo_str, param = param, h = h)
+  prev = infos[[1]]
+  plots = infos[[2]]
+  
+  plot <- ggplot()+
+    geom_line(data = df_to_show, aes(x = index, y = price))+
+    ggtitle("Preço do Ouro")+
+    geom_line(data = prev, aes(x = index, y = price), color = "blue")+
+    labs(x = "Data", y = "Valor de Fechamento", title = paste(modelo_str,
+                                                                paste0("(",
+                                                                      paste(param, collapse = ", "),
+                                                                      ")"
+                                                                      )
+                                                                ))+
+      theme(plot.title = element_text(size = 24, hjust = 0.5))
+  
+    plot1 = plots[[1]] + xlab("Data") + ylab("Resíduo") + labs(title = "Resíduos do Modelo") +
+      theme(plot.title = element_text(size = 10, hjust = 0.5))
+    
+    plot2 = plots[[2]] + xlab("Lag") + ylab("Autocorrelação") + labs(title = "Autocorrelação do Modelo")+
+      theme(plot.title = element_text(size = 10, hjust = 0.5))
+    
+    plot3 = plots[[3]] + xlab("Resíduo") + ylab("Contagem") + labs(title = "Histograma dos Resíduos")+
+      theme(plot.title = element_text(size = 10, hjust = 0.5))
+    
+    plot_grid = grid.arrange(arrangeGrob(plot, ncol = 1),
+                             arrangeGrob(plot1, plot2, plot3, ncol = 3),
+                             ncol = 1)
+    
+    return(plot_grid)
+}
+```
+
+```{r}
+df = get_data_stock("GC=F")
+prev = get_prev(df, modelo_str = "ARIMA", param = c(1,1,1), h = 5)
+get_graph(df, "ARIMA", c(1,1,1), show = 100, h = 5)
+#get_diag(df, modelo_str = "ARIMA", param = c(1,1,1), h = 5)
+```
+
+```{r}
+ui <- fluidPage(
+  titlePanel("Comparação de modelos para a previsão do valor do ouro"),
+
+  sliderInput(inputId = "slider_modelos",
+              label = "Escolha um modelo:",
+              min = 1, max = 3, value = 1),
+  
+  sliderInput(inputId = "slider_obs",
+              label = "Escolha o tamanho da série temporal:",
+              min = 1, max = 100, value = 20),
+  
+  plotOutput("plot_pred")
+)
+```
+
+```{r}
+server <- function(input, output, session) {
+  get_data_stock = function(symbol, source = "yahoo"){
+    suppressWarnings({
+      getSymbols(symbol, src = source)
+      gold.data = fortify(get(symbol))
+      gold.data <- data.frame(gold.data)
+    })
+    df = gold.data[,c(1,4)]
+    colnames(df) = c("index", "price")
+    return(df)
+  }
+  
+  get_prev = function(data, modelo_str, param, h = 5){
+    sequencia = seq(from = data[nrow(data),1], by = 1, length.out = 5)
+    data = na.omit(data)
+    data$index = seq(from = data[1,1], by = 1, length.out = nrow(data))
+    ts_df = as_tsibble(data)
+    if(modelo_str == "ARIMA"){
+      modelo = ts_df %>% model(ARIMA(price ~ pdq(param[1],param[2],param[3])))
+    }
+    plots = feasts::gg_tsresiduals(modelo)
+    prev = forecast(modelo, h = 5)
+    prev = as.data.frame(prev)
+    prev$index= sequencia
+    prev = prev[,c(2,4)]
+    colnames(prev) = c("index", "price")
+    return(list(prev, plots))
+  }
+  
+  get_graph = function(data, modelo_str, param, show = nrow(data), h = 5){
+    df_to_show = data[(nrow(data)-show):nrow(data),]
+    df_to_show = na.omit(df_to_show)
+    
+    infos = get_prev(data = data, modelo_str = modelo_str, param = param, h = h)
+    prev = infos[[1]]
+    plots = infos[[2]]
+    
+    plot <- ggplot()+
+      geom_line(data = df_to_show, aes(x = index, y = price))+
+      ggtitle("Preço do Ouro")+
+      geom_line(data = prev, aes(x = index, y = price), color = "blue")+
+      labs(x = "Data", y = "Valor de Fechamento", title = paste(modelo_str,
+                                                                  paste0("(",
+                                                                        paste(param, collapse = ", "),
+                                                                        ")"
+                                                                        )
+                                                                  ))+
+        theme(plot.title = element_text(size = 24, hjust = 0.5))
+    
+      plot1 = plots[[1]] + xlab("Data") + ylab("Resíduo") + labs(title = "Resíduos do Modelo") +
+        theme(plot.title = element_text(size = 10, hjust = 0.5))
+      
+      plot2 = plots[[2]] + xlab("Lag") + ylab("Autocorrelação") + labs(title = "Autocorrelação do Modelo")+
+        theme(plot.title = element_text(size = 10, hjust = 0.5))
+      
+      plot3 = plots[[3]] + xlab("Resíduo") + ylab("Contagem") + labs(title = "Histograma dos Resíduos")+
+        theme(plot.title = element_text(size = 10, hjust = 0.5))
+      
+      plot_grid = grid.arrange(arrangeGrob(plot, ncol = 1),
+                               arrangeGrob(plot1, plot2, plot3, ncol = 3),
+                               ncol = 1)
+      
+      return(plot_grid)
+  }
+  
+  options <- c("ARIMA 1,1,1", "ARIMA 1,1,0", "ARIMA 0,1,1")
+    
+  observeEvent(input$slider_modelos, {
+    updateTextInput(session, "modelos", value = options[input$slider_modelos])
+    
+  })
+
+  modelos = c("ARIMA", "ARIMA", "ARIMA")
+  parametros = list(c(1,1,1), c(1,1,0), c(0,1,1))
+  
+  data <- get_data_stock("GC=F")
+
+  output$plot_pred <- renderPlot({
+    modelo <- modelos[input$slider_modelos]
+    param <- parametros[[input$slider_modelos]]
+    show = input$slider_obs
+    plots = get_graph(data, modelo, param, show, h = 5)
+  })
+  
+}
+```
+
+```{r}
+shinyApp(ui = ui, server = server)
+```

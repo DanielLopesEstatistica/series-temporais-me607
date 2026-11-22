@@ -1,0 +1,247 @@
+---
+title: "Modelos Séries Temporais"
+output: html_document
+date: "2023-03-24"
+---
+
+```{r}
+Plot_Models = function(df, vect_models, name_models, forecast = 365){
+  XandY = colnames(df)
+  x = XandY[1]
+  y = XandY[2]
+  
+  lista = list()
+  
+  for(n in 1:length(vect_models)){
+    aux_df = vect_models[[n]](df, forecast)
+    Modelo = rep(name_models[[n]], forecast)
+    aux_df = cbind(aux_df, Modelo)
+    lista[[n]] = aux_df
+  }
+  
+  models_df = do.call(rbind, lista)
+  
+  plot_series = df |> ggplot() + 
+  geom_line(aes(x = .data[[x]], y = .data[[y]]), color = "green4") +
+  geom_line(data = models_df, aes(x = timestamp, y = values, color =  Modelo))+
+  ylab("Preço de fechamento") + 
+  xlab("Tempo")
+  
+  plot_series
+}
+```
+
+```{r}
+Prediction_Dates = function(df, forecast){
+  date_diff = as.numeric(df[2,1] - df[1,1])
+  start_date = df[nrow(df),1] + date_diff
+  start_date = start_date$timestamp[1]
+  timestamp = seq(start_date, length.out = forecast, by = paste(date_diff, "days"))
+  return(timestamp)
+}
+```
+
+```{r}
+Mod_Media = function(df, forecast = 365){
+  timestamp = Prediction_Dates(df, forecast)
+  values = rep(mean(unlist(df[,2])), forecast)
+  df_final = data.frame(timestamp, values)
+  return(df_final)
+}
+```
+
+```{r}
+Mod_Naive = function(df, forecast = 365){
+  timestamp = Prediction_Dates(df, forecast)
+  values = rep(unlist(df[nrow(df),2]), forecast)
+  df_final = data.frame(timestamp, values)
+  return(df_final)
+}
+```
+
+```{r}
+Mod_Naive_Saz = function(df, forecast = 365){
+  timestamp = Prediction_Dates(df, forecast)
+  obs = nrow(df)
+  values = unlist(df[seq(obs-forecast+1, obs),2])
+  df_final = data.frame(timestamp, values)
+  return(df_final)
+}
+```
+
+```{r}
+Mod_Drift = function(df, forecast = 365){
+  timestamp = Prediction_Dates(df, forecast)
+  obs = nrow(df)
+  primeiro = unlist(df[1,2])
+  ultimo = unlist(df[obs,2])
+  h = seq(1:forecast)
+  values = ultimo + h*((ultimo - primeiro)/(obs-1))
+  df_final = data.frame(timestamp, values)
+  return(df_final)
+}
+```
+
+```{r}
+Estim_Suavizacao = function(alpha, l, Yt){
+  Number_T = length(Yt)
+  lista = list()
+  lista[[1]] = l
+  
+  for (n in 2:Number_T){
+    lista[[n]] = alpha*Yt[[n-1]] + (1 - alpha)*lista[[n-1]]
+  }
+  
+  vector = unlist(lista)
+  return(vector)
+}
+```
+
+```{r}
+SQE_Suavizacao = function(alpha, l, Yt){
+  Yt_chapeu = Estim_Suavizacao(alpha, l, Yt)
+  Errors_squared = (Yt - Yt_chapeu)^2
+  SQE = sum(Errors_squared)
+  return(SQE)
+}
+```
+
+```{r}
+Minimize_Suavizacao = function(Yt){
+  my_function <- function(x) SQE_Suavizacao(x[1], x[2], Yt)
+  lower <- c(0, -Inf)
+  upper <- c(1, Inf)
+  
+  result <- optim(c(0.5, 0), my_function, method = "L-BFGS-B", lower = lower, upper = upper)
+  
+  return(result)
+}
+```
+
+```{r}
+Mod_Suavizacao = function(df, forecast = 365){
+  timestamp = timestamp = Prediction_Dates(df, forecast)
+  Yt = unlist(df[,2])
+  result = Minimize_Suavizacao(Yt)
+  alpha_opt <- result$par[1]
+  
+  new_Yt = Yt
+  
+  lista = list()
+  
+  for(n in 1:forecast){
+    alpha_vector = alpha_opt*((1 - alpha_opt)^(((length(Yt)-1):0)))
+    new_value = sum(alpha_vector*new_Yt)
+    lista[[n]] = new_value
+    new_Yt <- c(tail(new_Yt, -1), new_value)
+  }
+  values = unlist(lista)
+  df_final = data.frame(timestamp, values)
+  return(df_final)
+}
+```
+
+```{r}
+Holt_Get_Mi_Beta = function(t, theta, gama, mi0, beta0, Yt, cache = list()) {
+  if (t == 0) {
+    vec = c(mi0, beta0)
+    return(vec)
+  }
+  
+  cache_key = paste(t, theta, gama, mi0, beta0, Yt[t])
+  if (cache_key %in% names(cache)) {
+    vec = cache[[cache_key]]
+    return(vec)
+  }
+  
+  vec_t_minus_1 = Holt_Get_Mi_Beta(t = (t-1), theta, gama, mi0, beta0, Yt, cache)
+  mi_minus_1 = vec_t_minus_1[1]
+  beta_minus_1 = vec_t_minus_1[2]
+  Y = Yt[t]
+  
+  mi = theta * Y + (1 - theta) * (mi_minus_1 + beta_minus_1)
+  beta = gama * beta_minus_1 + (1 - gama) * (mi - mi_minus_1)
+  
+  vec = c(mi, beta)
+  cache[[cache_key]] = vec
+  return(vec)
+}
+
+```
+
+```{r}
+Holt_Get_Y = function(Yt, forecast, theta, gama, mi0, beta0, cache = list()){
+  t = length(Yt)
+  vec = Holt_Get_Mi_Beta(t, theta, gama, mi0, beta0, Yt, cache = cache)
+  mi = vec[1]
+  beta = vec[2]
+  
+  yhat = mi + (1:forecast)*beta
+  return(yhat)
+}
+```
+
+```{r}
+SQE_Holt = function(Yt, theta, gama, mi0, beta0){
+  lista = list()
+  cache = list()  # initialize the cache
+  for(n in 1:(length(Yt))){
+    lista[[n]] = Holt_Get_Y(Yt, 1, theta, gama, mi0, beta0, cache)  # include the cache argument
+  }
+  Yhat = unlist(lista)
+  error_squared = (Yt - Yhat)^2
+  SQE = sum(error_squared)
+  return(SQE)
+}
+```
+
+```{r}
+Minimize_Holt = function(Yt){
+  my_function <- function(x) SQE_Holt(Yt, x[1], x[2], x[3], x[4])
+  lower <- c(0, 0, -Inf, -Inf)
+  upper <- c(1, 1, Inf, Inf)
+  
+  result <- optim(c(0.5, 0.5, 0, 0), my_function, method = "L-BFGS-B", lower = lower, upper = upper)
+  
+  return(result)
+}
+```
+
+```{r}
+Mod_Holt = function(df, forecast = 365){
+  timestamp = timestamp = Prediction_Dates(df, forecast)
+  Yt = unlist(df[,2])
+  result = Minimize_Holt(Yt)
+  theta = result$par[1]
+  gama = result$par[2]
+  mi0 = result$par[3]
+  beta0 = result$par[4]
+  
+  values = Holt_Get_Y(Yt, forecast, theta, gama, mi0, beta0)
+  df_final = data.frame(timestamp, values)
+  return(df_final)
+}
+```
+
+```{r}
+library(tidyverse)
+library(tsibble)
+
+url <- "https://raw.githubusercontent.com/ctruciosm/ctruciosm.github.io/master/datasets/BTCUSDT.csv"
+btc <- read.csv(url)
+btc <- btc |> 
+  select(timestamp, close) |> 
+  mutate(timestamp = as.Date(timestamp)) |> 
+  as_tsibble(index = timestamp)
+```
+
+```{r}
+Modelos = c(Mod_Media, Mod_Naive, Mod_Naive_Saz, Mod_Drift, Mod_Suavizacao, Mod_Holt)
+Nomes_Modelos = c("Media", "Naive", "Naive Sazional", "Drift", "Suavização Exponencial", "Modelo de Holt")
+
+Plot_Models(btc[1:30,], Modelos, Nomes_Modelos, forecast = 5)
+```
+
+
+
+

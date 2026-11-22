@@ -1,0 +1,35 @@
+---
+title: "Modelos"
+author: "Daniel"
+date: "2023-06-06"
+output: html_document
+---
+
+```{r}
+AR_est = function(Y, param){
+  l = length(Y)
+  phis = rep(0, param)
+  sigma = 1
+  
+  ML = function(vector_param, Y){
+    l2 = length(vector_param) - 1
+    result = 1
+    
+    for(n in l2:l){
+      Ys = Y[(n - l2):n]*vector_param[-(l2+1)]
+      result = result*dnorm(sum(Ys), mean = 0, sd = vector_param[l2+1])
+    }
+    return(-result)
+  }
+  
+  estimate = optim(c(phis, sigma), ML, Y = Y, method = "BFGS")
+  return(estimate)
+}
+```
+
+```{r}
+serie = arima.sim(list(1,0,0), 300)
+
+AR_est(serie, 2)
+```
+

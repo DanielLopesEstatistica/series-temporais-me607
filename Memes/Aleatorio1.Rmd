@@ -1,0 +1,93 @@
+---
+title: "TimeSeries"
+output: html_document
+date: "2023-04-14"
+---
+
+```{r}
+library(quantmod)
+library(tidyverse)
+library(tsibble)
+library(fpp3)
+library(seasonal)
+```
+
+```{r}
+get_df <- function(symbol, source = "yahoo", silent = TRUE){
+  result <- tryCatch({
+    getSymbols(symbol, src = source)
+    df = get(symbol)
+    if(silent == FALSE){
+      print(paste0("Ação ", symbol, " baixada com sucesso."))
+    }
+  }, error = function(e) {
+    df = FALSE
+    if(silent == FALSE){
+      print(paste0("Erro ao baixar a ação ", symbol, "."))
+    }
+  })
+  
+  return(df)
+}
+
+turn_to_tsibble = function(stocks){
+  n = nrow(stocks)
+  date = seq(Sys.Date(), length.out = n, by = "day")
+  df = data.frame(date = date, values = stocks[,4])
+  colnames(df) = c("date", "values")
+  df = df %>% as_tsibble(index = date)
+  return(df)
+}
+
+get_series <- function(symbols, source = "yahoo", silent = TRUE){
+  lista_stocks = list()
+  
+  for(n in 1:length(symbols)){
+    lista_stocks[[n]] = get_df(symbols[n], source = source, silent = silent)
+  }
+  
+  lista_stocks <- Filter(function(x) !is.function(x), lista_stocks)
+  return(lista_stocks)
+}
+```
+
+```{r}
+symbols <- c("AAPL", "AMZN", "GOOG", "FB", "MSFT", "TSLA", "NFLX", "NVDA", "PYPL", "BABA",
+             "JNJ", "JPM", "V", "PG", "UNH", "HD", "MA", "DIS", "CRM", "BAC",
+             "KO", "PEP", "WMT", "T", "VZ", "CMCSA", "PFE", "MRK", "ABBV", "CVX",
+             "XOM", "COP", "MRO", "BP", "RDS-A", "MCD", "SBUX", "YUM", "DPZ", "QSR",
+             "F", "GM", "TM", "HMC", "NSANY", "AAP", "BIDU", "JD", "TCEHY", "NIO",
+             "LMT", "BA", "NOC", "RTX", "LHX", "MMM", "GE", "CAT", "IBM", "INTC",
+             "AMD", "NVAX", "PFE", "MRNA", "JNJ", "ABBV", "GILD", "CVS", "WBA", "CI",
+             "UNH", "ANTM", "HUM", "AET", "COST", "WMT", "HD", "LOW", "AMT", "CCI",
+             "SPG", "PLD", "EQIX", "DLR", "CSCO", "MSFT", "ORCL", "IBM", "INTC", "QCOM",
+             "NOK", "T", "VZ", "TMUS", "S")
+```
+
+```{r}
+lista_stocks = get_series(symbols, silent = FALSE)
+```
+
+```{r}
+df = turn_to_tsibble(lista_stocks[[1]])
+```
+
+```{r}
+modelos <- df %>%
+  model(Mean = MEAN(values),
+        Naive = NAIVE(values),
+        #SNaive = SNAIVE(values ~ lag(12)),
+        Drift = RW(values ~ drift()),
+        Decomposition = decomposition_model(STL(values ~ trend(window = 7), robust = TRUE), NAIVE(season_adjust)),
+        TSM = TSLM(values ~ trend() + season()),
+        #Fourier = TSLM(values ~ trend() + fourier(K = 4)),
+        #Spline = TSLM(values ~ trend(knots = as.Date("2016-07-01"))),
+        ETS = ETS(values ~ error("A") + trend("N") + season("N")),
+        Holts = ETS(values ~ error("A") + trend("A") + season("N")),
+        Holts_Amortecido = ETS(values ~ error("A") + trend("Ad") + season("N")),
+        Holts_Winter = ETS(values ~ error("A") + trend("A") + season("A")))
+
+modelos |> forecast(h = 30) |> autoplot(df, level = NULL) 
+modelos %>% gg_tsresiduals()
+```
+
